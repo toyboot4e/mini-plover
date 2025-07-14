@@ -1,5 +1,6 @@
 //! `plover_stroke`
 
+use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,21 +27,56 @@ impl fmt::Display for KeyWithSide {
     }
 }
 
+impl KeyWithSide {
+    /// Parses `<key>`, `<key>-` or `-<key>`.
+    pub fn parse(s: &str) -> Option<Self> {
+        if s.len() > 8 {
+            // Apparently too long.
+            return None;
+        }
+
+        if s == "--" {
+            return None;
+        }
+
+        let cs = s.chars().collect::<Vec<_>>();
+        match cs.len() {
+            0 => None,
+            1 if s == "-" => None,
+            1 => Some(Self {
+                key: cs[0],
+                side: KeySide::None,
+            }),
+            2 if s == "--" => None,
+            2 if s.ends_with('-') => Some(Self {
+                key: cs[0],
+                side: KeySide::Left,
+            }),
+            2 if s.starts_with('-') => Some(Self {
+                key: cs[1],
+                side: KeySide::Right,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// Bitmask of characters pressed on a steno keyboard (up to 63 keys).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Stroke {
     /// Bitmask
     pub mask: usize,
 }
 
 /// Allow the number key letter `# to appear anywhere of steno if enabled.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FeralNumberKey {
     Enabled,
     Disabled,
 }
 
-/// Context for processing keys (up to 63) in steno order.
-pub struct Context {
+/// Steno keyboard keys in order.
+pub struct StenoKeys {
     /// 63, because we want to use bit flags of length `64`.
     n_max_keys: usize,
     /// n_max_keys + 1 (one hyphen).
@@ -59,9 +95,9 @@ pub struct Context {
     number_keys: Box<[char]>,
 }
 
-impl Context {
+impl StenoKeys {
     /// Creates `Stroke` from a `String` notation of it.
-    pub fn parse_stroke_notation(self, stroke_notation: String) -> Option<Stroke> {
+    pub fn parse_stroke(self, stroke_notation: String) -> Option<Stroke> {
         // FIXME: Is this correct? (All number keys are feral number keys)
         if stroke_notation
             .chars()
@@ -86,14 +122,14 @@ impl Context {
                     continue;
                 }
 
-                '-' if current_key_index > self.hyphen_index => {
-                    // `-` must not appear after right side key.
-                    return None;
-                }
-                '-' => {
-                    current_key_index = self.hyphen_index;
-                    continue;
-                }
+                '-' => match current_key_index.cmp(&self.hyphen_index) {
+                    Ordering::Greater => return None,
+                    // Equal: consecutive heyphens are allowed, right?
+                    Ordering::Equal | Ordering::Less => {
+                        current_key_index = self.hyphen_index;
+                        continue;
+                    }
+                },
                 _ => {}
             }
 
@@ -130,8 +166,11 @@ impl Context {
             mask |= self.number_key_mask;
         }
 
-        // We could remove this check:
-        self.stroke_from_bitmask(mask)
+        // We could remove this check, but let's prefer safety:
+        Some(
+            self.stroke_from_bitmask(mask)
+                .unwrap_or_else(|| unreachable!()),
+        )
     }
 
     /// Creates a `Stroke` from a bitmask, performing boundary check.
