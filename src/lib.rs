@@ -2,6 +2,4 @@
 //!
 //! [Plover]: https://github.com/openstenoproject/plover
 
-fn main() {
-    println!("Hello, world!");
-}
+pub mod plover_stroke;
