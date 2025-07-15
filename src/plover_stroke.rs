@@ -1,8 +1,12 @@
-//! `plover_stroke`
+//! Port of [`plover_stroke`](https://github.com/openstenoproject/plover_stroke).
+//!
+//! In this module, we denote the number of keys as _n_.
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::iter::zip;
 
+/// `None` | `Left` | `Right`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeySide {
     None,
@@ -68,7 +72,7 @@ pub struct Stroke {
     pub mask: usize,
 }
 
-/// Allow the number key letter `# to appear anywhere of steno if enabled.
+/// Allow the number key letter `#` to appear anywhere of stroke notation if enabled.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FeralNumberKey {
     Enabled,
@@ -79,7 +83,7 @@ pub enum FeralNumberKey {
 pub struct StenoKeys {
     /// 63, because we want to use bit flags of length `64`.
     n_max_keys: usize,
-    /// n_max_keys + 1 (one hyphen).
+    /// n_max_keys + 1 (+1 for hyphen).
     n_max_steno: usize,
     /// Represents a feral number key. TODO: different from number_key_mask?
     feral_number_key_char: Option<char>,
@@ -93,11 +97,59 @@ pub struct StenoKeys {
     letter_keys: Box<[char]>,
     /// Array of length `n_keys` that maps key index to numbers in number mode.
     number_keys: Box<[char]>,
+    /// Array of length `n_keys` that maps key index to side of the keyboard.
+    key_side: Box<[KeySide]>,
 }
 
 impl StenoKeys {
-    /// Creates `Stroke` from a `String` notation of it.
-    pub fn parse_stroke(self, stroke_notation: String) -> Option<Stroke> {
+    pub fn new(
+        keys: &[KeyWithSide],
+        implicit_hyphe_keys: &[char],
+        // TODO: Option(char, &[char])?
+        number_key: Option<char>,
+        numbers: &[char],
+        feral_number_key_char: Option<char>,
+    ) -> Option<Self> {
+        if number_key.is_none() && !numbers.is_empty() || number_key.is_some() && numbers.is_empty()
+        {
+            // TODO: return error instead
+            return None;
+        }
+
+        Some(Self {
+            n_max_keys: 63,
+            n_max_steno: 64,
+            feral_number_key_char,
+            n_keys: keys.len(),
+            number_key_mask: todo!(),
+            hyphen_index: todo!(),
+            letter_keys: todo!(),
+            number_keys: todo!(),
+            key_side: todo!(),
+        })
+    }
+
+    /// _O(min(64, n))_ Creates `Stroke` from a `String` notation of it. This function is strict
+    /// about steno order, meaning that the input string is basically a subsequence of `StenoKeys`.
+    ///
+    /// Say `ABCDE` is our `StenoKeys` and `AE` is the input. `AE` is clearly
+    ///
+    /// ```txt
+    /// A B C D E
+    /// A       E
+    /// ```
+    ///
+    /// ```
+    /// use mini_plover::plover_stroke::{KeyWithSide, StenoKeys, Stroke};
+    /// let keys = "A- B- C -D -E"
+    ///     .split_whitespace()
+    ///     .map(KeyWithSide::parse)
+    ///     .collect::<Option<Vec<_>>>()
+    ///     .unwrap();
+    /// let keys = StenoKeys::new(&keys, &[], None, &[], None).unwrap();
+    /// assert_eq!(keys.parse_stroke("AE"), Some(Stroke { mask: 9 }));
+    /// ```
+    pub fn parse_stroke(self, stroke_notation: &str) -> Option<Stroke> {
         // FIXME: Is this correct? (All number keys are feral number keys)
         if stroke_notation
             .chars()
@@ -109,7 +161,7 @@ impl StenoKeys {
             return None;
         }
 
-        // Bitmask of keys the `stroke` presses.
+        // Bitmask of keys  the `stroke` presses.
         let mut mask = 0;
 
         let mut current_key_index = 0;
@@ -173,7 +225,7 @@ impl StenoKeys {
         )
     }
 
-    /// Creates a `Stroke` from a bitmask, performing boundary check.
+    /// _O(1)_ Creates a `Stroke` from a bitmask, performing boundary check.
     pub fn stroke_from_bitmask(&self, mask: usize) -> Option<Stroke> {
         if mask >> self.n_keys == 0 {
             Some(Stroke { mask })
@@ -182,7 +234,40 @@ impl StenoKeys {
         }
     }
 
-    pub fn create_stroke_from_keys(&self, keys: &[char]) -> Option<Stroke> {
-        todo!()
+    /// _O(kn)_ Creates `Stroke` from a slice of `KeyWithSide`. The function is not strict about
+    /// steno order and just sums up the given keys to the resulting `Stroke`.
+    pub fn stroke_from_keys(&self, keys: &[KeyWithSide]) -> Option<Stroke> {
+        let mut mask = 0;
+
+        // TODO: rev?
+        for KeyWithSide { key, side } in keys.iter().rev().cloned() {
+            let current_keys = if matches!(key, '0'..'9') {
+                mask |= self.number_key_mask;
+                &self.number_keys
+            } else {
+                &self.letter_keys
+            };
+
+            let (start, end) = match side {
+                KeySide::None => (0, self.n_keys),
+                KeySide::Left => (0, self.hyphen_index),
+                KeySide::Right => (self.hyphen_index, self.n_keys),
+            };
+
+            // TODO: It should be more strict about steno order, e.g., it accepts `A- -A A-`?
+            if let Some(k) = zip(
+                current_keys[start..end].iter(),
+                self.key_side[start..end].iter(),
+            )
+            .position(|(&k, &s)| (k, s) == (key, side))
+            .map(|i| i + start)
+            {
+                mask |= 1 << k;
+            } else {
+                return None;
+            }
+        }
+
+        Some(Stroke { mask })
     }
 }
