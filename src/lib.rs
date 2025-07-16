@@ -6,3 +6,4 @@
 //! [big O notation]: https://en.wikipedia.org/wiki/Big_O_notation
 
 pub mod plover_stroke;
+pub mod util;
