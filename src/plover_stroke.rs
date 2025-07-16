@@ -81,6 +81,7 @@ pub enum FeralNumberKey {
 }
 
 /// Steno keyboard keys in order.
+// TODO: Name it propertly.
 pub struct StenoKeys {
     /// 63, because we want to use bit flags of length `64`.
     n_max_keys: usize,
@@ -88,19 +89,36 @@ pub struct StenoKeys {
     n_max_steno: usize,
     /// Represents a feral number key. TODO: different from number_key_mask?
     feral_number_key: Option<char>,
-    /// The number of keys in this steno keyboard.
-    n_keys: usize,
     /// Represents the bit of a number key if there any.
     // TODO: use Option<usize> and store the index instead.
     number_key_bit_mask: usize,
     /// Delimits left and right side keys. TODO: Is this correct?
     hyphen_index: usize,
     /// Array of length `n_keys` that maps key index to letters in normal mode.
-    letter_keys: Box<[char]>,
-    /// Array of length `n_keys` that maps key index to numbers in number mode.
-    number_keys: Box<[char]>,
-    /// Array of length `n_keys` that maps key index to side of the keyboard.
-    key_side: Box<[KeySide]>,
+    pub keys: Box<[Key]>,
+}
+
+// TODO: Name it StenoKey.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Key {
+    pub normal: char,
+    pub number: char,
+    pub side: KeySide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeyLayer {
+    Normal,
+    Number,
+}
+
+impl Key {
+    pub fn key_in_layer(&self, ty: KeyLayer) -> char {
+        match ty {
+            KeyLayer::Normal => self.normal,
+            KeyLayer::Number => self.number,
+        }
+    }
 }
 
 /// Error found in `StenoKeys::new`.
@@ -114,8 +132,8 @@ pub enum StenoKeysError {
     NotANumberKey(char),
     #[error("invalid implicit hyphen keys")]
     InvalidImplicitHyphenKeys,
-    #[error("found left side key after right side: {0}")]
-    InvalidLeftSideKey(KeyWithSide),
+    #[error("found left side key in right side: {0}")]
+    FoundLeftSideKeyInRightSide(char),
     #[error("expected number keys, but found none")]
     NotFoundNumberKeys,
     #[error("number key count is not equal to 10: {0}")]
@@ -129,14 +147,21 @@ impl StenoKeys {
     ///
     /// Bit mask represents a bitmask that filters a single bit. Mask or bitmask represents a
     /// set of bits.
+    ///
+    /// ## Constraints
+    /// -
+    ///
+    /// ## Invariants
+    /// -
     // TODO: report all the errors at once
     pub fn new(
-        keys: &[KeyWithSide],
+        keys_input: &[KeyWithSide],
         implicit_hyphen_keys: &[char],
         number_key: Option<char>,
         numbers: &[(char, char)],
         feral_number_keys_enabled: bool,
     ) -> Result<Self, StenoKeysError> {
+        // Input validation (TODO: Forbit invalid input with types)
         if number_key.is_none() && !numbers.is_empty() || number_key.is_some() && numbers.is_empty()
         {
             // Incompatible `number_key` and `numbers` setup.
@@ -153,53 +178,85 @@ impl StenoKeys {
             return Err(StenoKeysError::NotANumberKey(*v));
         }
 
-        let n_keys = keys.len();
-        let mut hyphen_index = n_keys; // Not known yet.
-        let mut number_key_bit_mask = 0usize;
-        let mut implicit_hyphen_mask = 0usize;
-        // TODO: Just collect as key_with_side?
-        let mut key_side = Vec::with_capacity(n_keys);
-        let mut letter_keys = Vec::with_capacity(n_keys);
-        let mut number_keys = Vec::with_capacity(n_keys);
-        let mut numbers_mask = 0usize;
+        // Now, for simplicity, I'll iterate through the `keys_input` multple times.
+        let n_keys = keys_input.len();
+        let keys = keys_input
+            .iter()
+            .cloned()
+            .map(|KeyWithSide { key, side }| {
+                let number = number_key
+                    .and_then(|_| {
+                        numbers.iter().cloned().find_map(
+                            |(k, v)| {
+                                if k == key {
+                                    Some(v)
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                    })
+                    .unwrap_or(key);
 
-        // TODO: Refactor and fix this loop
-        for (i, ks @ KeyWithSide { key, side }) in keys.iter().enumerate() {
+                Key {
+                    normal: key,
+                    number,
+                    side,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Not known yet.
+        let mut hyphen_index = n_keys;
+
+        let mut implicit_hyphen_mask = keys_input
+            .iter()
+            .enumerate()
+            .filter(|(_, KeyWithSide { key, .. })| implicit_hyphen_keys.contains(&key))
+            .fold(0usize, |mask, (i, _)| mask | (1 << i));
+
+        // TODO: What if there are emultiple number keys in the input?
+        let mut number_key_bit_mask = if let Some(number_key) = number_key {
+            keys_input
+                .iter()
+                .enumerate()
+                .find(|(i, KeyWithSide { key, .. })| *key == number_key)
+                .map(|(i, _)| 1 << i)
+                // TODO: warn or error if no number key is found?
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        let mut numbers_mask = if numbers.is_empty() {
+            0
+        } else {
+            keys_input
+                .iter()
+                .enumerate()
+                .filter(|(i, KeyWithSide { key, .. })| {
+                    numbers.iter().cloned().any(|(nk, _)| nk == *key)
+                })
+                .fold(0usize, |mask, (i, _)| mask | (1 << i))
+        };
+
+        // Left hand side keys must not appear in the right side.
+        // TODO: Refactor with scan-like function for this validation
+        for (i, KeyWithSide { key, side }) in keys_input.iter().cloned().enumerate() {
             let key_bit_mask: usize = 1 << i;
 
+            // TODO: validate with other loop
             match side {
-                KeySide::None => {}
-                // TODO: Why error here
                 KeySide::Left if hyphen_index != n_keys => {
-                    return Err(StenoKeysError::InvalidLeftSideKey(*ks))
+                    return Err(StenoKeysError::FoundLeftSideKeyInRightSide(key))
                 }
-                KeySide::Left => {}
-                KeySide::Right if hyphen_index != n_keys => hyphen_index = i,
-                KeySide::Right => {}
+                KeySide::Right if hyphen_index == n_keys => hyphen_index = i,
+                _ => {}
             }
 
-            if Some(*key) == number_key {
-                number_key_bit_mask = key_bit_mask;
-            }
-
-            if implicit_hyphen_keys.contains(key) {
-                implicit_hyphen_mask |= key_bit_mask;
-            }
-
-            key_side.push(*side);
-            letter_keys.push(*key);
-
-            if number_key.is_some()
-                && let Some(number_key) =
-                    numbers
-                        .iter()
-                        .find_map(|(nk, mapped)| if nk == key { Some(mapped) } else { None })
-            {
+            if number_key.is_some() && numbers.iter().cloned().any(|(nk, _)| nk == key) {
                 numbers_mask |= key_bit_mask;
-                number_keys.push(*number_key);
-            } else {
-                number_keys.push(*key);
-            }
+            };
         }
 
         // Check 1: Number key count must be 10
@@ -215,10 +272,11 @@ impl StenoKeys {
         }
 
         // Check 2: Find unique letters
-        let unique_key_mask =
-            crate::util::retain_unique_indices(keys.iter().map(|k| k.key).collect::<Vec<_>>())
-                .iter()
-                .fold(0usize, |mask, i| mask | (1 << i));
+        let unique_key_mask = crate::util::retain_unique_indices(
+            keys_input.iter().map(|k| k.key).collect::<Vec<_>>(),
+        )
+        .iter()
+        .fold(0usize, |mask, i| mask | (1 << i));
 
         if !implicit_hyphen_keys.is_empty() {
             // Check 3: Implicit hyphen keys all used
@@ -245,12 +303,9 @@ impl StenoKeys {
             } else {
                 None
             },
-            n_keys: keys.len(),
             number_key_bit_mask,
             hyphen_index,
-            letter_keys: letter_keys.into_boxed_slice(),
-            number_keys: number_keys.into_boxed_slice(),
-            key_side: key_side.into_boxed_slice(),
+            keys: keys.into_boxed_slice(),
         })
     }
 
@@ -310,23 +365,18 @@ impl StenoKeys {
                 _ => {}
             }
 
-            // Actual key handling
-            let current_keys = if matches!(c, '0'..'9') {
-                &self.number_keys
-            } else {
-                // TODO: This does not contain `#`, right? Otherwise the first loop in this
-                // function is wrong.
-                &self.letter_keys
-            };
-
             // Find next character that matches to the input, in steno order.
-            while let Some(&next_c) = current_keys.get(current_key_index)
-                && c != next_c
+            while let Some(key) = self.keys.get(current_key_index)
+                && if matches!(c, '0'..'9') {
+                    key.number
+                } else {
+                    key.normal
+                } != c
             {
                 current_key_index += 1;
             }
 
-            if current_key_index == self.n_keys {
+            if current_key_index == self.keys.len() {
                 // Failed to find the next key.
                 return None;
             }
@@ -352,7 +402,7 @@ impl StenoKeys {
 
     /// _O(1)_ Creates a `Stroke` from a bitmask, performing boundary check.
     pub fn stroke_from_bitmask(&self, mask: usize) -> Option<Stroke> {
-        if mask >> self.n_keys == 0 {
+        if mask >> self.keys.len() == 0 {
             Some(Stroke { mask })
         } else {
             None
@@ -366,26 +416,25 @@ impl StenoKeys {
 
         // TODO: rev?
         for KeyWithSide { key, side } in keys.iter().rev().cloned() {
-            let current_keys = if matches!(key, '0'..'9') {
-                mask |= self.number_key_bit_mask;
-                &self.number_keys
-            } else {
-                &self.letter_keys
-            };
-
             let (start, end) = match side {
-                KeySide::None => (0, self.n_keys),
+                KeySide::None => (0, self.keys.len()),
                 KeySide::Left => (0, self.hyphen_index),
-                KeySide::Right => (self.hyphen_index, self.n_keys),
+                KeySide::Right => (self.hyphen_index, self.keys.len()),
             };
 
             // TODO: It should be more strict about steno order, e.g., it accepts `A- -A A-`?
-            if let Some(k) = zip(
-                current_keys[start..end].iter(),
-                self.key_side[start..end].iter(),
-            )
-            .position(|(&k, &s)| (k, s) == (key, side))
-            .map(|i| i + start)
+            // It is the design of original `plover_stroke` though.
+            if let Some(k) = self.keys[start..end]
+                .iter()
+                .position(|steno_key| {
+                    let k = if matches!(key, '0'..'9') {
+                        steno_key.number
+                    } else {
+                        steno_key.normal
+                    };
+                    (k, steno_key.side) == (key, side)
+                })
+                .map(|i| i + start)
             {
                 mask |= 1 << k;
             } else {
