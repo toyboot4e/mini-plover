@@ -153,12 +153,14 @@ impl StenoKeys {
             return Err(StenoKeysError::NotANumberKey(*v));
         }
 
-        let mut hyphen_index = None; // Not known yet.
+        let n_keys = keys.len();
+        let mut hyphen_index = n_keys; // Not known yet.
         let mut number_key_bit_mask = 0usize;
         let mut implicit_hyphen_mask = 0usize;
         // TODO: Just collect as key_with_side?
-        let mut key_side = Vec::with_capacity(keys.len());
-        let mut key_letter = Vec::with_capacity(keys.len());
+        let mut key_side = Vec::with_capacity(n_keys);
+        let mut letter_keys = Vec::with_capacity(n_keys);
+        let mut number_keys = Vec::with_capacity(n_keys);
         let mut numbers_mask = 0usize;
 
         // TODO: Refactor and fix this loop
@@ -168,11 +170,11 @@ impl StenoKeys {
             match side {
                 KeySide::None => {}
                 // TODO: Why error here
-                KeySide::Left if hyphen_index.is_some() => {
+                KeySide::Left if hyphen_index != n_keys => {
                     return Err(StenoKeysError::InvalidLeftSideKey(*ks))
                 }
                 KeySide::Left => {}
-                KeySide::Right if hyphen_index.is_none() => hyphen_index = Some(i),
+                KeySide::Right if hyphen_index != n_keys => hyphen_index = i,
                 KeySide::Right => {}
             }
 
@@ -184,6 +186,9 @@ impl StenoKeys {
                 implicit_hyphen_mask |= key_bit_mask;
             }
 
+            key_side.push(*side);
+            letter_keys.push(*key);
+
             if number_key.is_some()
                 && let Some(number_key) =
                     numbers
@@ -191,10 +196,10 @@ impl StenoKeys {
                         .find_map(|(nk, mapped)| if nk == key { Some(mapped) } else { None })
             {
                 numbers_mask |= key_bit_mask;
+                number_keys.push(*number_key);
+            } else {
+                number_keys.push(*key);
             }
-
-            key_side.push(*side);
-            key_letter.push(*key);
         }
 
         // Check 1: Number key count must be 10
@@ -224,6 +229,7 @@ impl StenoKeys {
             // TODO: test that they're in a continuous block
             // TODO: test uniqueness of implicit_hyphen_keys
         } else {
+            // Check 4
             // TODO: Detect hyphen
         }
 
@@ -241,9 +247,9 @@ impl StenoKeys {
             },
             n_keys: keys.len(),
             number_key_bit_mask,
-            hyphen_index: todo!(),
-            letter_keys: todo!(),
-            number_keys: todo!(),
+            hyphen_index,
+            letter_keys: letter_keys.into_boxed_slice(),
+            number_keys: number_keys.into_boxed_slice(),
             key_side: key_side.into_boxed_slice(),
         })
     }
@@ -266,7 +272,7 @@ impl StenoKeys {
     ///     .collect::<Option<Vec<_>>>()
     ///     .unwrap();
     /// let keys = StenoKeys::new(&keys, &[], None, &[], false).unwrap();
-    /// assert_eq!(keys.parse_stroke("AE"), Some(Stroke { mask: 9 }));
+    /// assert_eq!(keys.parse_stroke("AE"), Some(Stroke { mask: 17 }));
     /// ```
     pub fn parse_stroke(self, stroke_notation: &str) -> Option<Stroke> {
         // FIXME: Is this correct? (All number keys are feral number keys)
