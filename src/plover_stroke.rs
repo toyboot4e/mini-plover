@@ -52,7 +52,7 @@ impl fmt::Display for LetterWithSide {
 }
 
 impl LetterWithSide {
-    /// Parses `<key>`, `<key>-` or `-<key>`.
+    /// Parses `<letter>`, `<letter>-` or `-<letter>`.
     pub fn parse(s: &str) -> Option<Self> {
         if s.len() > 8 {
             // Apparently too long.
@@ -170,6 +170,8 @@ pub enum StenoSystemError {
     NotFoundNumberKeys,
     #[error("number key count is not equal to 10: {0}")]
     NumberKeyCountNot10(u32),
+    #[error("cannot have both feral number key and implicit hyphen key")]
+    CannotHaveBothFeralNumberKeyAndImplicitHyphenKey,
 }
 
 impl StenoSystem {
@@ -180,6 +182,7 @@ impl StenoSystem {
         letters: &[LetterWithSide],
         implicit_hyphen_keys: &[char],
         number_key: Option<char>,
+        // TODO: use HashMap
         numbers: &[(char, char)],
         feral_number_keys_enabled: bool,
     ) -> Result<Self, StenoSystemError> {
@@ -349,7 +352,9 @@ impl StenoSystem {
         };
 
         if feral_number_keys_enabled {
-            //
+            if (number_key_bit_mask & implicit_hyphen_mask) != 0 {
+                return Err(StenoSystemError::CannotHaveBothFeralNumberKeyAndImplicitHyphenKey);
+            }
         }
 
         Ok(Self {
