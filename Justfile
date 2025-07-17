@@ -21,14 +21,14 @@ alias d := doc
 
 # runs the documentation test
 doctest *args:
-    cargo test --doc {{args}} # -- open
+    cargo test --doc {{args}}
 
 [private]
 alias dt := doctest
 
 # runs the tests
 test *args:
-    cargo test {{args}} # -- open
+    cargo test {{args}} # --open
 
 [private]
 alias t := test

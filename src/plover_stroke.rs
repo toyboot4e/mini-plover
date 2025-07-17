@@ -134,6 +134,7 @@ pub struct StenoKey {
     pub side: KeySide,
 }
 
+/// `Normal` | `Number`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyLayer {
     Normal,
@@ -180,10 +181,10 @@ impl StenoSystem {
     /// (_n_: number of keys, _k_: length of the `numbers` map)
     pub fn new(
         letters: &[LetterWithSide],
-        implicit_hyphen_keys: &[char],
+        implicit_hyphen_letters: &[LetterWithSide],
         number_key: Option<char>,
         // TODO: use HashMap
-        numbers: &[(char, char)],
+        numbers: &[(LetterWithSide, char)],
         feral_number_keys_enabled: bool,
     ) -> Result<Self, StenoSystemError> {
         // Input validation (TODO: Forbit invalid input with types)
@@ -208,7 +209,7 @@ impl StenoSystem {
         let keys = letters
             .iter()
             .cloned()
-            .map(|LetterWithSide { letter: key, side }| {
+            .map(|key| {
                 let number = number_key
                     .and_then(|_| {
                         numbers.iter().cloned().find_map(
@@ -221,22 +222,22 @@ impl StenoSystem {
                             },
                         )
                     })
-                    .unwrap_or(key);
+                    .unwrap_or(key.letter);
 
                 StenoKey {
-                    normal: key,
+                    normal: key.letter,
                     number,
-                    side,
+                    side: key.side,
                 }
             })
             .collect::<Vec<_>>();
 
         // TODO: What if there are emultiple number keys in the input?
-        let number_key_bit_mask = if let Some(number_key) = number_key {
+        let number_key_bit_mask = if let Some(number_letter) = number_key {
             letters
                 .iter()
                 .enumerate()
-                .find(|(i, LetterWithSide { letter: key, .. })| *key == number_key)
+                .find(|(i, LetterWithSide { letter, .. })| *letter == number_letter)
                 .map(|(i, _)| 1 << i)
                 // TODO: warn or error if no number key is found?
                 .unwrap_or(0)
@@ -244,14 +245,17 @@ impl StenoSystem {
             0
         };
 
-        let mut numbers_mask = if numbers.is_empty() {
+        let numbers_mask = if numbers.is_empty() {
             0
         } else {
             letters
                 .iter()
                 .enumerate()
-                .filter(|(_, LetterWithSide { letter: key, .. })| {
-                    numbers.iter().cloned().any(|(nk, _)| nk == *key)
+                .filter(|(_, LetterWithSide { letter, .. })| {
+                    numbers
+                        .iter()
+                        .cloned()
+                        .any(|(number_key, _)| number_key.letter == *letter)
                 })
                 .fold(0usize, |mask, (i, _)| mask | (1 << i))
         };
@@ -300,20 +304,20 @@ impl StenoSystem {
         .iter()
         .fold(0usize, |mask, i| mask | (1 << i));
 
-        let implicit_hyphen_mask = if !implicit_hyphen_keys.is_empty() {
+        let implicit_hyphen_mask = if !implicit_hyphen_letters.is_empty() {
             // Create implicit hyphen key mask with an assumption that all of the keys are unique
             // (ensured later)
             let implicit_hyphen_mask = letters
                 .iter()
                 .enumerate()
-                .filter(|(_, LetterWithSide { letter: key, .. })| {
-                    implicit_hyphen_keys.contains(&key)
+                .filter(|(_, LetterWithSide { letter, .. })| {
+                    implicit_hyphen_letters.iter().any(|l| l.letter == *letter)
                 })
                 .fold(0usize, |mask, (i, _)| mask | (1 << i));
 
             // All of the implicit hyphen keys must be used
             let n1 = implicit_hyphen_mask.count_ones();
-            if n1 as usize != implicit_hyphen_keys.len() {
+            if n1 as usize != implicit_hyphen_letters.len() {
                 return Err(StenoSystemError::InvalidImplicitHyphenKeys);
             }
 
@@ -480,7 +484,7 @@ impl StenoSystem {
         let mut mask = 0;
 
         // TODO: rev?
-        for LetterWithSide { letter: key, side } in keys.iter().rev().cloned() {
+        for LetterWithSide { letter, side } in keys.iter().rev().cloned() {
             let (start, end) = match side {
                 KeySide::None => (0, self.keys.len()),
                 KeySide::Left => (0, self.right_keys_index),
@@ -492,12 +496,12 @@ impl StenoSystem {
             if let Some(k) = self.keys[start..end]
                 .iter()
                 .position(|steno_key| {
-                    let k = if matches!(key, '0'..'9') {
+                    let c = if matches!(letter, '0'..'9') {
                         steno_key.number
                     } else {
                         steno_key.normal
                     };
-                    (k, steno_key.side) == (key, side)
+                    (c, steno_key.side) == (letter, side)
                 })
                 .map(|i| i + start)
             {
