@@ -2,6 +2,7 @@
 
 use fxhash::FxHashMap;
 use std::hash::Hash;
+use std::ops;
 
 pub fn counts<T: Eq + Hash>(xs: impl IntoIterator<Item = T>) -> FxHashMap<T, usize> {
     let mut cnts = FxHashMap::default();
@@ -36,4 +37,9 @@ where
         .filter(|(_, x)| cnts.get(x) == Some(&1))
         .map(|(i, _)| i)
         .collect::<Vec<_>>()
+}
+
+/// _O(1)_
+pub fn contains_range<T: PartialOrd>(outer: ops::Range<T>, inner: ops::Range<T>) -> bool {
+    outer.start <= inner.start && inner.end <= outer.end
 }

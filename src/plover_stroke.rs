@@ -14,6 +14,7 @@ mod test;
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::ops;
 use thiserror::Error;
 
 /// `None` | `Left` | `Right`
@@ -123,8 +124,8 @@ pub struct StenoSystem {
 pub enum StenoSystemError {
     #[error("invalid implicit hyphen keys")]
     InvalidImplicitHyphenKeys,
-    #[error("given non-continuous implicit hyphen keys")]
-    NonContinuousImplicitHyphenKeys,
+    #[error("given out of range implicit hyphen key range")]
+    OutOfRangeImplicitHyphenKeyRange,
     #[error("not all implicit hyphen keys are unique")]
     NotAllImplicitHyphenKeysUnique,
     #[error("found left side key in right side: {0}")]
@@ -137,8 +138,10 @@ impl StenoSystem {
     /// (_n_: number of keys, _k_: length of the `numbers` map)
     pub fn new(
         letters: &[LetterWithSide],
-        implicit_hyphen_letters: &[char],
+        implicit_hyphen_key_range: Option<ops::Range<usize>>,
     ) -> Result<Self, StenoSystemError> {
+        let implicit_hyphen_key_range = implicit_hyphen_key_range.unwrap_or(0..0);
+
         // Now, for simplicity, I'll iterate through the `keys_input` multple times.
         let n_keys = letters.len();
         let keys = Vec::<LetterWithSide>::from(letters);
@@ -167,30 +170,16 @@ impl StenoSystem {
         .fold(0usize, |mask, i| mask | (1 << i));
 
         let implicit_hyphen_mask = {
+            if !crate::util::contains_range(0..keys.len(), implicit_hyphen_key_range.clone()) {
+                return Err(StenoSystemError::OutOfRangeImplicitHyphenKeyRange);
+            }
+
             // Create implicit hyphen key mask with an assumption that all of the keys are unique
             // (ensured later)
-            let implicit_hyphen_mask = letters
-                .iter()
-                .enumerate()
-                .filter(|(_, LetterWithSide { letter, .. })| {
-                    implicit_hyphen_letters.iter().any(|l| *l == *letter)
-                })
-                .fold(0usize, |mask, (i, _)| mask | (1 << i));
-
-            // validate the mask
-
-            // All of the implicit hyphen keys must be used
-            let n1 = implicit_hyphen_mask.count_ones();
-            if n1 as usize != implicit_hyphen_letters.len() {
-                return Err(StenoSystemError::InvalidImplicitHyphenKeys);
-            }
-
-            // All of the implicit hyphen keys must be a contiguous block
-            let range_size =
-                64 - (implicit_hyphen_mask.leading_zeros() + implicit_hyphen_mask.trailing_zeros());
-            if range_size != n1 {
-                return Err(StenoSystemError::NonContinuousImplicitHyphenKeys);
-            }
+            let implicit_hyphen_mask = implicit_hyphen_key_range
+                .clone()
+                .into_iter()
+                .fold(0usize, |mask, i| mask | (1 << i));
 
             // All of the implicit hyphen keys must be unique so that we can auto insert hyphens
             if (implicit_hyphen_mask & unique_key_mask) != implicit_hyphen_mask {
@@ -228,7 +217,7 @@ impl StenoSystem {
     ///     .map(LetterWithSide::parse)
     ///     .collect::<Option<Vec<_>>>()
     ///     .unwrap();
-    /// let system = StenoSystem::new(&keys, &['C']).unwrap();
+    /// let system = StenoSystem::new(&keys, Some(2..3)).unwrap();
     /// assert_eq!(system.parse_stroke("AE"), Some(Stroke { mask: 17 }));
     /// ```
     pub fn parse_stroke(self, stroke_notation: &str) -> Option<Stroke> {
