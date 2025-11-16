@@ -2,8 +2,8 @@
 //!
 //! # Terms
 //!
-//! Mask or bitmask represents a set of bits. Bit mask represents a bitmask that filters a single
-//! bit.
+//! - Mask or bitmask represents a set of bits.
+//! - Bit mask represents a bitmask that filters a single bit.
 //!
 //! # Notations
 //!
@@ -109,6 +109,9 @@ pub struct StenoSystem {
     n_max_keys: usize,
     /// n_max_keys + 1 (+1 for hyphen).
     n_max_steno: usize,
+    /// A bitmask that filters a contiguous block of keys whose letters are unique and the side can
+    /// be known without explicit specification by user.
+    implicit_hyphen_mask: usize,
     /// Index of the first right side key.
     right_keys_index: usize,
     /// Array of length `n_keys` that maps key indeise to letters in normal mode.
@@ -134,28 +137,19 @@ impl StenoSystem {
     /// (_n_: number of keys, _k_: length of the `numbers` map)
     pub fn new(
         letters: &[LetterWithSide],
-        implicit_hyphen_letters: &[LetterWithSide],
+        implicit_hyphen_letters: &[char],
     ) -> Result<Self, StenoSystemError> {
         // Now, for simplicity, I'll iterate through the `keys_input` multple times.
         let n_keys = letters.len();
         let keys = Vec::<LetterWithSide>::from(letters);
 
-        // Left hand side keys must not appear in the right side.
-        // TODO: Refactor with scan-like function for this validation
-        // Not known yet.
+        // Find the first right-side key index:
         let right_keys_index = letters
             .iter()
-            .cloned()
-            .enumerate()
-            .find_map(|(i, LetterWithSide { side, .. })| {
-                if side == KeySide::Right {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
+            .position(|LetterWithSide { side, .. }| *side == KeySide::Right)
             .unwrap_or(n_keys);
 
+        // Left hand side keys must not appear after the first right side key:
         if let Some(k) = letters
             .iter()
             .skip(right_keys_index + 1)
@@ -172,16 +166,18 @@ impl StenoSystem {
         .iter()
         .fold(0usize, |mask, i| mask | (1 << i));
 
-        let implicit_hyphen_mask = if !implicit_hyphen_letters.is_empty() {
+        let implicit_hyphen_mask = {
             // Create implicit hyphen key mask with an assumption that all of the keys are unique
             // (ensured later)
             let implicit_hyphen_mask = letters
                 .iter()
                 .enumerate()
                 .filter(|(_, LetterWithSide { letter, .. })| {
-                    implicit_hyphen_letters.iter().any(|l| l.letter == *letter)
+                    implicit_hyphen_letters.iter().any(|l| *l == *letter)
                 })
                 .fold(0usize, |mask, (i, _)| mask | (1 << i));
+
+            // validate the mask
 
             // All of the implicit hyphen keys must be used
             let n1 = implicit_hyphen_mask.count_ones();
@@ -189,7 +185,7 @@ impl StenoSystem {
                 return Err(StenoSystemError::InvalidImplicitHyphenKeys);
             }
 
-            // All of the implicit hyphen keys are in a contiguous block
+            // All of the implicit hyphen keys must be a contiguous block
             let range_size =
                 64 - (implicit_hyphen_mask.leading_zeros() + implicit_hyphen_mask.trailing_zeros());
             if range_size != n1 {
@@ -202,30 +198,12 @@ impl StenoSystem {
             }
 
             implicit_hyphen_mask
-        } else {
-            // Detect implicit hyphen keys in an automatic way.
-            // TODO: Delete this case and force use provide with implicit hyphen keys
-
-            // Find the leftmost unique letter key (inclusive)
-            let l: usize = (0..right_keys_index)
-                .rev()
-                .take_while(|i| (unique_key_mask & (1 << i)) != 0)
-                .last()
-                .unwrap_or(right_keys_index);
-
-            // Find the right unique letter key (exclusive)
-            let r: usize = (right_keys_index + 1..n_keys)
-                .take_while(|i| (unique_key_mask & (1 << i)) != 0)
-                .last()
-                .unwrap_or(right_keys_index);
-
-            // FIXME: Create bitmask in [l, r)
-            ((1 << l) - 1) & ((1 << r) - 1)
         };
 
         Ok(Self {
             n_max_keys: 63,
             n_max_steno: 64,
+            implicit_hyphen_mask,
             right_keys_index,
             keys: keys.into_boxed_slice(),
         })
@@ -250,8 +228,8 @@ impl StenoSystem {
     ///     .map(LetterWithSide::parse)
     ///     .collect::<Option<Vec<_>>>()
     ///     .unwrap();
-    /// let keys = StenoSystem::new(&keys, &[]).unwrap();
-    /// assert_eq!(keys.parse_stroke("AE"), Some(Stroke { mask: 17 }));
+    /// let system = StenoSystem::new(&keys, &['C']).unwrap();
+    /// assert_eq!(system.parse_stroke("AE"), Some(Stroke { mask: 17 }));
     /// ```
     pub fn parse_stroke(self, stroke_notation: &str) -> Option<Stroke> {
         // Bitmask of keys  the `stroke` presses.
@@ -263,6 +241,7 @@ impl StenoSystem {
             // Meta key handling
             match c {
                 '-' => match current_key_index.cmp(&self.right_keys_index) {
+                    // unreachable:
                     Ordering::Greater => return None,
                     // Equal: consecutive heyphens are allowed, right?
                     Ordering::Equal | Ordering::Less => {
@@ -274,9 +253,11 @@ impl StenoSystem {
             }
 
             // Find next character that matches to the input, in steno order.
-            while let Some(key) = self.keys.get(current_key_index)
-                && key.letter != c
-            {
+            // while let Some(key) = self.keys.get(current_key_index)
+            while matches!(
+                self.keys.get(current_key_index),
+                Some(key) if key.letter != c,
+            ) {
                 current_key_index += 1;
             }
 
@@ -305,9 +286,8 @@ impl StenoSystem {
         }
     }
 
-    /// _O(kn)_ Creates `Stroke` from a slice of `LetterWithSide`. The function is
-    /// not strict about steno order and just sums up the given keys to the
-    /// resulting `Stroke`.
+    /// _O(kn)_ Creates [`Stroke`] from a slice of [`LetterWithSide`]. The function is not strict
+    /// about steno order and just sums up the given keys to the resulting `Stroke`.
     pub fn stroke_from_keys(&self, keys: &[LetterWithSide]) -> Option<Stroke> {
         let mut mask = 0;
 

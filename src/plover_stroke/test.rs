@@ -20,11 +20,7 @@ fn english_system_keys() -> Vec<LetterWithSide> {
 }
 
 fn english_system() -> StenoSystem {
-    StenoSystem::new(
-        &english_system_keys(),
-        parse_keys(r#"A- O- * -E -U"#).unwrap().as_ref(),
-    )
-    .unwrap()
+    StenoSystem::new(&english_system_keys(), &['A', 'O', '*', 'E', 'U']).unwrap()
 }
 
 #[test]
