@@ -26,6 +26,7 @@ fn english_system() -> StenoSystem {
 #[test]
 fn test_minimal() {
     let system = english_system();
+
     assert_eq!(
         system.right_keys_index,
         english_system_keys()
@@ -36,5 +37,10 @@ fn test_minimal() {
                     side: KeySide::Right
                 })
             .unwrap(),
+    );
+
+    assert_eq!(
+        system.implicit_hyphen_mask,
+        (8..13).into_iter().fold(0usize, |acc, i| acc | (1 << i))
     );
 }

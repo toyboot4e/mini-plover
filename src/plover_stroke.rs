@@ -192,7 +192,7 @@ impl StenoSystem {
                 return Err(StenoSystemError::NonContinuousImplicitHyphenKeys);
             }
 
-            // All of the implicit hyphen keys must be unique so that we can insert hyphens
+            // All of the implicit hyphen keys must be unique so that we can auto insert hyphens
             if (implicit_hyphen_mask & unique_key_mask) != implicit_hyphen_mask {
                 return Err(StenoSystemError::NotAllImplicitHyphenKeysUnique);
             }
