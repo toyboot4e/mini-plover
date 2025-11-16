@@ -1,10 +1,5 @@
 //! Port of [`plover_stroke`](https://github.com/openstenoproject/plover_stroke).
 //!
-//! # Terms
-//!
-//! - Mask or bitmask represents a set of bits.
-//! - Bit mask represents a bitmask that filters a single bit.
-//!
 //! # Notations
 //!
 //! In this module, we denote the number of keys as _n_.
@@ -96,11 +91,7 @@ pub struct Stroke {
     pub mask: usize,
 }
 
-/// A sequence of stenographic keyboard keys and a set of rules.
-///
-/// - Key positioning: which keys are on the left or the right side of the keyboard.
-/// - Implicit hyphen rules: Which keys automatically include hyphens in their representation,
-///   allowing users to omit `-` in their steno stroke notation.
+/// A sequence of stenographic keyboard keys.
 ///
 /// Different from the original `plover_stroke`, our `StenoSystem` does not have number key
 /// layout information, because they should be implemented as dictionary data.
@@ -115,7 +106,7 @@ pub struct StenoSystem {
     implicit_hyphen_mask: usize,
     /// Index of the first right side key.
     right_keys_index: usize,
-    /// Array of length `n_keys` that maps key indeise to letters in normal mode.
+    /// Array of length `n_keys` that maps key indices to letters.
     pub keys: Box<[LetterWithSide]>,
 }
 
@@ -266,7 +257,7 @@ impl StenoSystem {
         )
     }
 
-    /// _O(1)_ Creates a `Stroke` from a bitmask, performing boundary check.
+    /// _O(1)_ Creates a [`Stroke`] from a bitmask, performing boundary check.
     pub fn stroke_from_bitmask(&self, mask: usize) -> Option<Stroke> {
         if mask >> self.keys.len() == 0 {
             Some(Stroke { mask })
@@ -276,7 +267,7 @@ impl StenoSystem {
     }
 
     /// _O(kn)_ Creates [`Stroke`] from a slice of [`LetterWithSide`]. The function is not strict
-    /// about steno order and just sums up the given keys to the resulting `Stroke`.
+    /// about steno order and just sums up the given keys to the resulting [`Stroke`].
     pub fn stroke_from_keys(&self, keys: &[LetterWithSide]) -> Option<Stroke> {
         let mut mask = 0;
 
@@ -303,4 +294,56 @@ impl StenoSystem {
 
         Some(Stroke { mask })
     }
+}
+
+/// Utilities for parsing steno keys from a string notation.
+///
+/// # Example
+///
+/// English steno key can be parsed as follows:
+///
+/// ```
+/// let s = r##"
+///     #
+///     S- T- K- P- W- H- R-
+///     A- O-
+///     *
+///     -E -U
+///     -F -R -P -B -L -G -T -S -D -Z
+/// "##;
+/// let _ = mini_plover::plover_stroke::parse_keys(s);
+/// ```
+pub fn parse_keys(s: &str) -> Option<Vec<LetterWithSide>> {
+    s.split_whitespace()
+        .map(LetterWithSide::parse)
+        .collect::<Option<Vec<_>>>()
+}
+
+/// Utilities for parsing a steno system from a string notation.
+///
+/// # Example
+///
+/// English steno key can be parsed as follows:
+///
+/// ```
+/// let s = r##"
+///     #
+///     S- T- K- P- W- H- R-
+///     A- O-
+///     *
+///     -E -U
+///     -F -R -P -B -L -G -T -S -D -Z
+/// "##;
+///
+/// // A-, O-, *, -E, -U are the implicit hyphen keys (unique keys where the side is deterministic):
+/// let r = 8..13;
+///
+/// let _ = mini_plover::plover_stroke::parse_system(s, Some(8..13));
+/// ```
+pub fn parse_system(
+    s: &str,
+    rng: Option<ops::Range<usize>>,
+) -> Option<Result<StenoSystem, StenoSystemError>> {
+    let keys = self::parse_keys(s)?;
+    Some(StenoSystem::new(&keys, rng))
 }

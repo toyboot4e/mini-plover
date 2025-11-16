@@ -1,10 +1,4 @@
-use crate::plover_stroke::{KeySide, LetterWithSide, StenoSystem};
-
-fn parse_keys(s: &str) -> Option<Vec<LetterWithSide>> {
-    s.split_whitespace()
-        .map(LetterWithSide::parse)
-        .collect::<Option<Vec<_>>>()
-}
+use crate::plover_stroke::{self, KeySide, LetterWithSide, StenoSystem};
 
 fn english_system_keys() -> Vec<LetterWithSide> {
     let s = r##"
@@ -16,7 +10,7 @@ fn english_system_keys() -> Vec<LetterWithSide> {
         -F -R -P -B -L -G -T -S -D -Z
 "##;
 
-    parse_keys(s).unwrap()
+    plover_stroke::parse_keys(s).unwrap()
 }
 
 fn english_system() -> StenoSystem {
