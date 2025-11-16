@@ -9,6 +9,9 @@
 //!
 //! In this module, we denote the number of keys as _n_.
 
+#[cfg(test)]
+mod test;
+
 use std::cmp::Ordering;
 use std::fmt;
 use thiserror::Error;
