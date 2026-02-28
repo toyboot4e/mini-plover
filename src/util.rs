@@ -1,6 +1,6 @@
 //! Utilities.
 
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 use std::ops;
 
