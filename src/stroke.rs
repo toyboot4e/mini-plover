@@ -13,8 +13,6 @@ use std::fmt;
 use std::ops;
 use thiserror::Error;
 
-pub type Outline<'a> = &'a [Stroke];
-
 /// `None` | `Left` | `Right`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeySide {
@@ -92,6 +90,12 @@ impl LetterWithSide {
 pub struct Stroke {
     /// Bitmask
     pub mask: usize,
+}
+
+impl Stroke {
+    pub fn new(mask: usize) -> Self {
+        Self { mask }
+    }
 }
 
 /// A sequence of stenographic keyboard keys.

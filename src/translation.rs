@@ -1,10 +1,13 @@
-//! Translation: converts an [`Outline`] into output strings or commands.
+//! Translation: converts an outline into output strings or commands.
 //!
 //! - undoable
 
-use crate::stroke::Outline;
+#[cfg(test)]
+mod test;
 
-#[derive(Debug, Clone)]
+use crate::stroke::Stroke;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Translation {
     translated: String,
 }
@@ -15,7 +18,12 @@ pub struct Translator {
 }
 
 impl Translator {
-    pub fn translate(&mut self, outline: &Outline) -> Translation {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn translate(&mut self, _outline: &[Stroke]) -> Translation {
+        // TODO: translate with dictionaries
         Translation {
             translated: "dummy".to_string(),
         }
