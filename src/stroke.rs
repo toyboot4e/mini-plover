@@ -1,4 +1,5 @@
-//! Port of [`plover_stroke`](https://github.com/openstenoproject/plover_stroke).
+//! Port of [`plover_stroke`](https://github.com/openstenoproject/plover_stroke) and the stroke
+//! module.
 //!
 //! # Notations
 //!
@@ -11,6 +12,8 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::ops;
 use thiserror::Error;
+
+pub type Outline<'a> = &'a [Stroke];
 
 /// `None` | `Left` | `Right`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +28,7 @@ pub enum KeySide {
 /// # Examples
 ///
 /// ```
-/// use mini_plover::plover_stroke::{KeySide, LetterWithSide};
+/// use mini_plover::stroke::{KeySide, LetterWithSide};
 /// assert_eq!(
 ///     LetterWithSide::parse("a-"),
 ///     Some(LetterWithSide {
@@ -93,7 +96,7 @@ pub struct Stroke {
 
 /// A sequence of stenographic keyboard keys.
 ///
-/// Different from the original `plover_stroke`, our `StenoSystem` does not have number key
+/// Different from the original `stroke`, our `StenoSystem` does not have number key
 /// layout information, because they should be implemented as dictionary data.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StenoSystem {
@@ -202,7 +205,7 @@ impl StenoSystem {
     /// ```
     ///
     /// ```
-    /// use mini_plover::plover_stroke::{LetterWithSide, StenoSystem, Stroke};
+    /// use mini_plover::stroke::{LetterWithSide, StenoSystem, Stroke};
     /// let keys = "A- B- C -D -E"
     ///     .split_whitespace()
     ///     .map(LetterWithSide::parse)
@@ -280,7 +283,7 @@ impl StenoSystem {
             };
 
             // TODO: It should be more strict about steno order, e.g., it accepts `A- -A
-            // A-`? It is the design of original `plover_stroke` though.
+            // A-`? It is the design of original `stroke` though.
             if let Some(k) = self.keys[start..end]
                 .iter()
                 .position(|steno_key| steno_key.letter == letter && steno_key.side == side)
@@ -311,7 +314,7 @@ impl StenoSystem {
 ///     -E -U
 ///     -F -R -P -B -L -G -T -S -D -Z
 /// "##;
-/// let _ = mini_plover::plover_stroke::parse_keys(s);
+/// let _ = mini_plover::stroke::parse_keys(s);
 /// ```
 pub fn parse_keys(s: &str) -> Option<Vec<LetterWithSide>> {
     s.split_whitespace()
@@ -338,7 +341,7 @@ pub fn parse_keys(s: &str) -> Option<Vec<LetterWithSide>> {
 /// // A-, O-, *, -E, -U are the implicit hyphen keys (unique keys where the side is deterministic):
 /// let r = 8..13;
 ///
-/// let _ = mini_plover::plover_stroke::parse_system(s, Some(8..13));
+/// let _ = mini_plover::stroke::parse_system(s, Some(8..13));
 /// ```
 pub fn parse_system(
     s: &str,

@@ -3,11 +3,13 @@
 //! - No `{plover:deleted}` support.
 
 /// Maps sequences to translations and tracks the length of the longest key.
+#[derive(Debug, Clone)]
 pub struct StenoDictionary {
     dict: (),
     rev: (),
 }
 
+#[derive(Debug, Clone)]
 pub struct StenoDictionaryCollection {
     //
     dicts: Vec<StenoDictionary>,

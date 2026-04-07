@@ -4,10 +4,12 @@
 
 use crate::stroke::Outline;
 
+#[derive(Debug, Clone)]
 pub struct Translation {
-    translated: string,
+    translated: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct Translator {
     //
 }
