@@ -1,4 +1,4 @@
-//! A minimum implementation of [Plover], the stenography engine.
+//! A minimal implementation of [Plover], the stenography engine.
 //!
 //! Throughout this library, we denote time complexity of functions with [big O notation].
 //!

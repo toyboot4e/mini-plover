@@ -296,7 +296,7 @@ impl StenoSystem {
     }
 }
 
-/// Utilities for parsing steno keys from a string notation.
+/// Parses steno keys from a string notation.
 ///
 /// # Example
 ///
@@ -319,7 +319,7 @@ pub fn parse_keys(s: &str) -> Option<Vec<LetterWithSide>> {
         .collect::<Option<Vec<_>>>()
 }
 
-/// Utilities for parsing a steno system from a string notation.
+/// Parses a steno system from a string notation.
 ///
 /// # Example
 ///
