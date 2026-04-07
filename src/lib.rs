@@ -8,4 +8,5 @@
 pub mod dictionary;
 pub mod engine;
 pub mod plover_stroke;
+pub mod translation;
 pub mod util;
