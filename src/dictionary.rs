@@ -7,6 +7,7 @@ mod test;
 
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
 
 /// String notation of an outline.
 ///
@@ -15,6 +16,18 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// It's serialized/deserialized as a string, storkes separated by "/".
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Outline(pub Vec<String>);
+
+impl fmt::Display for Outline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        for (i, s) in self.0.iter().enumerate() {
+            write!(f, "{}", s)?;
+            if i != self.0.len() - 1 {
+                write!(f, "{}", "/")?;
+            }
+        }
+        Ok(())
+    }
+}
 
 impl Serialize for Outline {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
