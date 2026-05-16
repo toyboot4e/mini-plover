@@ -2,41 +2,94 @@
 //!
 //! - No `{plover:deleted}` support.
 
-use rustc_hash::FxHashMap;
+#[cfg(test)]
+mod test;
 
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+/// String notation of an outline.
+///
+/// # Serialization format
+///
+/// It's serialized/deserialized as a string, storkes separated by "/".
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Outline(pub Vec<String>);
+
+impl Serialize for Outline {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.join("/").serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Outline {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let ss = s.split("/").map(|s| s.to_string()).collect::<Vec<_>>();
+        // TODO: validate each stroke
+        Ok(Self(ss))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Output {
     String(String),
     // Command
 }
 
 /// Maps sequences to translations and tracks the length of the longest key.
+///
+/// # Serialization format
+///
+/// The dictionary is serialized/deserialized as a map from an outline to the output.
 #[derive(Debug, Clone)]
 pub struct StenoDictionary {
-    entries: FxHashMap<Vec<String>, Output>,
-    rev: FxHashMap<Output, Vec<Vec<String>>>,
+    entries: FxHashMap<Outline, Output>,
+    rev: FxHashMap<Output, Vec<Outline>>,
+}
+
+impl Serialize for StenoDictionary {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.entries.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for StenoDictionary {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let entries = FxHashMap::<Outline, Output>::deserialize(deserializer)?;
+        Ok(Self::new(entries))
+    }
 }
 
 impl StenoDictionary {
-    pub fn new(entries: FxHashMap<Vec<String>, Output>) -> Self {
-        let mut rev = FxHashMap::<Output, Vec<Vec<String>>>::default();
+    pub fn new(entries: FxHashMap<Outline, Output>) -> Self {
+        let mut rev = FxHashMap::<Output, Vec<Outline>>::default();
         for (outline, output) in &entries {
-            if let Some(v) = rev.get_mut(output) {
-                v.push(outline.clone());
-            } else {
-                rev.insert(output.clone(), vec![outline.clone()]);
-            }
+            rev.entry(output.clone()).or_default().push(outline.clone());
         }
         Self { entries, rev }
     }
 
     /// Looks up an output for the outline.
-    pub fn get(&self, outline: &[String]) -> Option<&Output> {
+    pub fn get(&self, outline: &Outline) -> Option<&Output> {
         self.entries.get(outline)
     }
 
     /// Looks up outlines for the output.
-    pub fn rev_get(&self, output: &Output) -> Option<&Vec<Vec<String>>> {
+    pub fn rev_get(&self, output: &Output) -> Option<&Vec<Outline>> {
         self.rev.get(output)
     }
 }
@@ -53,12 +106,12 @@ impl StenoDictionaryStack {
     }
 
     /// Looks up an output for the outline.
-    pub fn get(&self, outline: &[String]) -> Option<&Output> {
+    pub fn get(&self, outline: &Outline) -> Option<&Output> {
         self.dicts.iter().find_map(|d| d.get(outline))
     }
 
     /// Looks up outlines for the output.
-    pub fn rev_get(&self, output: &Output) -> Option<&Vec<Vec<String>>> {
+    pub fn rev_get(&self, output: &Output) -> Option<&Vec<Outline>> {
         self.dicts.iter().find_map(|d| d.rev_get(output))
     }
 }
