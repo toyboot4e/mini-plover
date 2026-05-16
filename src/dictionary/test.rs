@@ -10,7 +10,29 @@ const DICT: &'static str = r#"
 "#;
 
 #[test]
-fn test_get() {
+fn outline_single() {
+    let s = "ABC";
+    let outline = Outline(vec![s.to_string()]);
+    assert_eq!(format!("{}", outline), s);
+    let t: String = serde_json::to_string(&outline).unwrap();
+    assert_eq!(t, format!("\"{s}\""));
+    let outline2: Outline = serde_json::from_str(&t).unwrap();
+    assert_eq!(outline2, outline);
+}
+
+#[test]
+fn outline_multi() {
+    let s = "ABC/DEF";
+    let outline = Outline(vec!["ABC".to_string(), "DEF".to_string()]);
+    assert_eq!(format!("{}", outline), s);
+    let t: String = serde_json::to_string(&outline).unwrap();
+    assert_eq!(t, format!("\"{s}\""));
+    let outline2: Outline = serde_json::from_str(&t).unwrap();
+    assert_eq!(outline2, outline);
+}
+
+#[test]
+fn get() {
     let dict: StenoDictionary = serde_json::from_str(DICT).unwrap();
     dbg!(&dict);
 
