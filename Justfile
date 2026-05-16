@@ -19,6 +19,10 @@ doc *args:
 [private]
 alias d := doc
 
+[private]
+do *args:
+    cargo doc --open {{args}}
+
 # runs the documentation test
 doctest *args:
     cargo test --doc {{args}}
@@ -28,10 +32,14 @@ alias dt := doctest
 
 # runs the tests
 test *args:
-    cargo test {{args}} # --open
+    cargo test {{args}}
 
 [private]
 alias t := test
+
+# many tewts
+mt *args:
+    PROPTEST_CASES=10000 cargo test {{args}}
 
 # runs the executable
 run *args:
