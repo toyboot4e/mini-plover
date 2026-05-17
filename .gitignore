@@ -5,3 +5,4 @@ target-ra
 *.pdb
 **/mutants.out*/
 .idea/
+/.direnv
