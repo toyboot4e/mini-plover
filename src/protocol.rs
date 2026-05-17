@@ -1,1 +1,1 @@
-pub mod hid;
+pub mod plover_hid;

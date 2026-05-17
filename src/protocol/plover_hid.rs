@@ -7,9 +7,13 @@ use hidapi::HidApi;
 use crate::stroke::Stroke;
 
 // Plover HID protocol on USB HID
-const USAGE_PAGE: u16 = 0xFF50;
-const USAGE: u16 = 0x4C56;
 const REPORT_ID: u8 = 0x50;
+
+fn is_plover_hid(dev_info: &hidapi::DeviceInfo) -> bool {
+    const USAGE_PAGE: u16 = 0xFF50;
+    const USAGE: u16 = 0x4C56;
+    dev_info.usage_page() == USAGE_PAGE && dev_info.usage() == USAGE
+}
 
 /// Chord detection mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +28,7 @@ pub enum ChordMode {
 /// Open the first Plover HID device found.
 pub fn open_device(api: &HidApi) -> Option<hidapi::HidResult<hidapi::HidDevice>> {
     api.device_list().find_map(|dev_info| {
-        if dev_info.usage_page() == USAGE_PAGE && dev_info.usage() == USAGE {
+        if is_plover_hid(dev_info) {
             Some(dev_info.open_device(api))
         } else {
             None
