@@ -1,4 +1,4 @@
-# mini-plover
+# qlover
 
 WIP. Nothing done yet.
 

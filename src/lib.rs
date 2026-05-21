@@ -1,9 +1,9 @@
-//! A minimal implementation of [Plover], the stenography engine.
+//! A stenography engine in Rust.
 //!
 //! Throughout this library, we denote time complexity of functions with [big O notation].
 //!
-//! [Plover]: https://github.com/openstenoproject/plover
 //! [big O notation]: https://en.wikipedia.org/wiki/Big_O_notation
+//! [Plover]: https://github.com/openstenoproject/plover
 
 pub mod dictionary;
 pub mod engine;

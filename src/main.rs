@@ -1,8 +1,6 @@
-//! A minimal implementation of [Plover], the stenography engine.
-//!
-//! [Plover]: https://github.com/openstenoproject/plover
+//! A stenography engine in Rust.
 
-use mini_plover::engine::Engine;
+use qlover::engine::Engine;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
